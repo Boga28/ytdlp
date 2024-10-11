@@ -20,6 +20,7 @@ def get_videos(url, extra_params):
   ydl_params = {
       'format': 'best',
       'cachedir': False,
+      'verbose': False,
       'logger': current_app.logger.getChild('youtube-dl'),
   }
   ydl_params.update(extra_params)
@@ -150,8 +151,8 @@ def index():
   return "Hello, World!"
 if __name__ == '__main__':
   # Debug/Development
-# app.run(debug=True, host="0.0.0.0", port="5000")
+ #app.run(debug=True, host="0.0.0.0", port="5000")
   # Production
   #app.run(host="0.0.0.0",  port=81)
-  http_server = WSGIServer(('', 5000), app)
+  http_server = WSGIServer(('127.0.0.1', 8080), app)
   http_server.serve_forever()
