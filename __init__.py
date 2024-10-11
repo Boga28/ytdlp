@@ -1,1 +1,1 @@
-from .version import __version__  # noqa: used externally
+from .version import __version__
