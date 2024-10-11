@@ -1,7 +1,6 @@
 import argparse
 
 from .app import appython server.py
-p
 from .version import __version__
 
 """
