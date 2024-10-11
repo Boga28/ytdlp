@@ -14,7 +14,7 @@ except ImportError:
     ytdl_variant = 'yt_dlp'
 
 
-from .version import __version__
+#from .version import __version__
 
 
 if not hasattr(sys.stderr, 'isatty'):
