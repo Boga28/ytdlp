@@ -1,6 +1,7 @@
 import argparse
 
 from .app import appython server.py
+p
 from .version import __version__
 
 """
@@ -17,7 +18,7 @@ def main():
 
     parser.add_argument(
         '-p', '--port',
-        default=8080,
+        default=9191,
         type=int,
         help='The port the server will use. The default is: %(default)s',
     )
