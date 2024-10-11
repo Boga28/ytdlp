@@ -184,7 +184,7 @@ def list_extractors():
 def version():
     result = {
         'youtube-dl': youtube_dl_version,
-        'youtube-dl-api-server': '0.3',
+        'youtube-dl-api-server': 0.3,
         'youtube-dl-variant': ytdl_variant,
     }
     return jsonify(result)
