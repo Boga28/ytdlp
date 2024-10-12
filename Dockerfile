@@ -1,69 +1,21 @@
-##########
-# BUILDER #
-###########
+# Use the official Python 3.8 slim image as the base image
+FROM python:3.8-slim
 
-# pull official base image
-FROM python:Python 3.13.0-slim-buster as builder
+# Set the working directory within the container
+WORKDIR /api-flask
 
-# set work directory
-WORKDIR /usr/src/app
+# Copy the necessary files and directories into the container
+COPY resources/ static/ util/ .env application.py requirements.txt /api-flask/
+COPY resources/ /api-flask/resources/
+COPY static/ /api-flask/static/
+COPY util/ /api-flask/util/
+COPY .env application.py requirements.txt  /api-flask/
 
-# set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+# Upgrade pip and install Python dependencies
+RUN pip3 install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
-# install system dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc
+# Expose port 5000 for the Flask application
+EXPOSE 5000
 
-# lint
-RUN pip install --upgrade pip
-RUN pip install flake8==6.0.0
-COPY . /usr/src/app/
-RUN flake8 --ignore=E501,F401 .
-
-# install python dependencies
-COPY ./requirements.txt .
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /usr/src/app/wheels -r requirements.txt
-
-
-#########
-# FINAL #
-#########
-
-# pull official base image
-FROM python:3.11.3-slim-buster
-
-# create directory for the app user
-RUN mkdir -p /home/app
-
-# create the app user
-RUN addgroup --system app && adduser --system --group app
-
-# create the appropriate directories
-ENV HOME=/home/app
-ENV APP_HOME=/home/app/web
-RUN mkdir $APP_HOME
-WORKDIR $APP_HOME
-
-# install dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends netcat
-COPY --from=builder /usr/src/app/wheels /wheels
-COPY --from=builder /usr/src/app/requirements.txt .
-RUN pip install --upgrade pip
-RUN pip install --no-cache /wheels/*
-
-# copy entrypoint-prod.sh
-COPY ./entrypoint.prod.sh $APP_HOME
-
-# copy project
-COPY . $APP_HOME
-
-# chown all the files to the app user
-RUN chown -R app:app $APP_HOME
-
-# change to the app user
-USER app
-
-# run entrypoint.prod.sh
-ENTRYPOINT ["/home/app/web/entrypoint.prod.sh"]
+# Define the command to run the Flask application using Gunicorn
+CMD ["gunicorn", "application:app", "-b", "0.0.0.0:5000", "-w", "4"]
