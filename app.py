@@ -164,19 +164,7 @@ shared_space = os.path.join(os.path.dirname(app.instance_path), os.sep, '')
 #username = getpass.getuser() #current username
 #shared_space = 'C:\\Users\\{}\\Downloads'.format(username) #Shared folder location. customize it on your need. 
 
-def get_dir_size(path='.'):
-    total = 0
-    
-    try:
-        with os.scandir(path) as d:
-            for f in d:
-                if f.is_file():
-                    total += f.stat().st_size
-                elif f.is_dir():
-                    total += get_dir_size(f.path)  
-    except:
-        total = total
-    return total
+
       
 
 @app.route('/directory/')
@@ -196,16 +184,16 @@ def get_file_list(folder_path):
     for item in os.listdir(folder_path):
         item_path = os.path.join(folder_path, item)
         if os.path.isfile(item_path):
-            items.append({'name': item, 'type': 'file', 'size': os.path.getsize(item_path)})
+            items.append({'name': item, 'type': 'file'})
         elif os.path.isdir(item_path):
-            items.append({'name': item, 'type': 'folder', 'size':get_dir_size(item_path)})
+            items.append({'name': item, 'type': 'folder'})
     return items
 
 if __name__ == '__main__':
   # Debug/Development
   app.config["CACHE_TYPE"] = "null"
- app.run(debug=False, host="0.0.0.0", port="5000")
+  #app.run(debug=False, host="0.0.0.0", port="5000")
   # Production
   #app.run(host="0.0.0.0",  port=81)
- # http_server = WSGIServer(('', 5000), app)
-  #http_server.serve_forever()
+  http_server = WSGIServer(('', 5000), app)
+  http_server.serve_forever()
