@@ -11,4 +11,5 @@ COPY . /app
 RUN pip install -r requirements.txt
 
 # Define the entry point for the container
-CMD ["flask", "run", "--host=0.0.0.0"]
+CMD ["gunicorn", "--workers", "1", "--threads", "1", "app:app", "--max-requests", "5", "--max-requests-jitter", "2"]
+
