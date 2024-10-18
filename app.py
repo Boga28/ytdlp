@@ -156,7 +156,7 @@ def index():
 
 
 home_directory = os.path.expanduser("~")
-shared_space = os.path.join(Path.cwd(), os.sep, '')
+shared_space = os.path.join(os.path.dirname(app.instance_path), os.sep, '')
 
 #import getpass
 #username = getpass.getuser() #current username
