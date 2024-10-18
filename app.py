@@ -149,6 +149,37 @@ app.config.from_pyfile('../application.cfg', silent=True)
 @app.route('/api', methods=['GET'])
 def index():
   return "Hello, World!"
+
+
+home_directory = os.path.expanduser("~")
+shared_space = os.path.join(Path.cwd(), os.sep, '')
+
+#import getpass
+#username = getpass.getuser() #current username
+#shared_space = 'C:\\Users\\{}\\Downloads'.format(username) #Shared folder location. customize it on your need. 
+
+@app.route('/directory/')
+@app.route('/directory/<path:folder>/')
+def directory(folder=''):
+    folder_path = os.path.join(shared_space, folder)
+    files = get_file_list(folder_path)
+    return render_template('directory.html', files=files, current_folder=folder_path)
+
+@app.route('/directory/<path:folder>/<filename>')
+def download_file(folder, filename):
+    folder_path = os.path.join(shared_space, folder)
+    return send_from_directory(folder_path, filename)
+
+def get_file_list(folder_path):
+    items = []
+    for item in os.listdir(folder_path):
+        item_path = os.path.join(folder_path, item)
+        if os.path.isfile(item_path):
+            items.append({'name': item, 'type': 'file'})
+        elif os.path.isdir(item_path):
+            items.append({'name': item, 'type': 'folder'})
+    return items
+
 if __name__ == '__main__':
   # Debug/Development
  #app.run(debug=True, host="0.0.0.0", port="5000")
