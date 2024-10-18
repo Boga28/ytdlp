@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>File Sharing</title>
+</head>
+<body>
+    <h1>File Sharing</h1>
+    <ul>
+        {% if current_folder %}
+            <li><a href="{{ url_for('directory') }}">Up to Parent</a></li>
+        {% endif %}
+        {% for item in files %}
+            {% if item.type == 'file' %}
+                <li><a href="{{ url_for('download_file', folder=current_folder, filename=item.name) }}">{{ item.name }}</a></li>
+            {% elif item.type == 'folder' %}
+                <li><a href="{{ url_for('directory', folder=current_folder+'/'+item.name) }}">{{ item.name }}/</a></li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+</body>
+</html>
