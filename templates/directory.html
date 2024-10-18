@@ -1,22 +1,91 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <title>File Sharing</title>
+
+    <style>
+        .ok {
+
+            font-size: 20px;
+        }
+
+        .op {
+            font-size: 20px;
+            margin-left: -70px;
+            font-weight: bold;
+            background-color: yellow;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .styled-table {
+            border-collapse: collapse;
+            margin: 25px 0;
+            font-size: 0.9em;
+            font-family: sans-serif;
+            min-width: 400px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .styled-table thead tr {
+            background-color: #009879;
+            color: #ffffff;
+            text-align: left;
+        }
+
+        .styled-table th,
+        .styled-table td {
+            padding: 12px 15px;
+        }
+
+        .styled-table tbody tr {
+            border-bottom: 1px solid #dddddd;
+        }
+
+        .styled-table tbody tr:nth-of-type(even) {
+            background-color: #f3f3f3;
+        }
+
+        .styled-table tbody tr:last-of-type {
+            border-bottom: 2px solid #009879;
+        }
+
+        .styled-table tbody tr.active-row {
+            font-weight: bold;
+            color: #009879;
+        }
+    </style>
 </head>
+
 <body>
-    <h1>File Sharing</h1>
-    <ul>
-        {% if current_folder %}
+    <div class="styled-table">
+        <h1>File Sharing</h1>
+        <table class="styled-table">
+            {% if current_folder %}
             <li><a href="{{ url_for('directory') }}">Up to Parent</a></li>
-        {% endif %}
-        {% for item in files %}
-            {% if item.type == 'file' %}
-                <li><a href="{{ url_for('download_file', folder=current_folder, filename=item.name) }}">{{ item.name }}</a></li>
-            {% elif item.type == 'folder' %}
-                <li><a href="{{ url_for('directory', folder=current_folder+'/'+item.name) }}">{{ item.name }}/</a></li>
             {% endif %}
-        {% endfor %}
-    </ul>
+            <tr>
+                <th>Folder</th>
+                <th>Size</th>
+            </tr>
+            {% for item in files %}
+            <tr>
+
+                {% if item.type == 'file' %}
+                <td> <a href="{{ url_for('download_file', folder=current_folder, filename=item.name) }}">{{ item.name
+                        }}</a></td>
+                <td>Size:{{item.size}}KB</td>
+                {% elif item.type == 'folder' %}
+                <td> <a href="{{ url_for('directory', folder=current_folder+'/'+item.name) }}">{{ item.name }}/</a></td>
+                <td>Size:{{item.size}}KB</td>
+                {% endif %}
+
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
 </body>
+
 </html>
