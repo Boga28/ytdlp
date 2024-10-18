@@ -68,7 +68,7 @@
             {% endif %}
             <tr>
                 <th>Folder</th>
-                <th>Size</th>
+        
             </tr>
             {% for item in files %}
             <tr>
@@ -76,10 +76,10 @@
                 {% if item.type == 'file' %}
                 <td> <a href="{{ url_for('download_file', folder=current_folder, filename=item.name) }}">{{ item.name
                         }}</a></td>
-                <td>Size:{{item.size}}B</td>
+                
                 {% elif item.type == 'folder' %}
                 <td> <a href="{{ url_for('directory', folder=current_folder+'/'+item.name) }}">{{ item.name }}/</a></td>
-                <td>Size:{{item.size}}B</td>
+               
                 {% endif %}
 
             </tr>
