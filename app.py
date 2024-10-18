@@ -163,19 +163,21 @@ shared_space = os.path.join(os.path.dirname(app.instance_path), os.sep, '')
 #import getpass
 #username = getpass.getuser() #current username
 #shared_space = 'C:\\Users\\{}\\Downloads'.format(username) #Shared folder location. customize it on your need. 
+
 def get_dir_size(path='.'):
     total = 0
+    
     try:
-        for p in os.listdir(path):
-            full_path = os.path.join(path, p)
-            if os.path.isfile(full_path):
-                total += os.path.getsize(full_path)
-            elif os.path.isdir(full_path):
-                total += get_dir_size(full_path)
+        with os.scandir(path) as d:
+            for f in d:
+                if f.is_file():
+                    total += f.stat().st_size
+                elif f.is_dir():
+                    total += get_dir_size(f.path)  
     except:
         total = total
     return total
-
+      
 
 @app.route('/directory/')
 @app.route('/directory/<path:folder>/')
