@@ -27,6 +27,12 @@ def get_videos(url, extra_params):
       'verbose': False,
       'logger': current_app.logger.getChild('yt-dlp'),
   }
+  # *** Added cookies parameter ***
+  # If your Flask config contains a YTDLP_COOKIES_PATH, include it:
+  cookies_path = current_app.config.get('/cookies.txt')
+  if cookies_path:
+      ydl_params['cookies'] = cookies_path
+  
   ydl_params.update(extra_params)
   ydl = SimpleYDL(ydl_params)
   res = ydl.extract_info(url, download=False)
