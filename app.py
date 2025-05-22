@@ -4,7 +4,8 @@ import traceback
 import sys
 from flask import Flask, Blueprint, current_app, jsonify, request, redirect, abort
 from io import BytesIO
-from flask import Flask, render_template, send_from_directory, url_for,send_file,request,jsonify
+# Grouped Flask imports for clarity
+from flask import render_template, send_from_directory, url_for, send_file 
 import os
 import tempfile # Added for temporary cookie file handling
 from pathlib import Path
@@ -26,6 +27,14 @@ def get_videos(url, extra_params):
   '''
     Get a list with a dict for every video founded
     '''
+  # --- START: TEMPORARY DEBUG LOG to check environment variable ---
+  retrieved_cookie_content_from_env = os.environ.get('YOUTUBE_COOKIES_CONTENT')
+  if retrieved_cookie_content_from_env:
+      current_app.logger.info(f"DEBUG: YOUTUBE_COOKIES_CONTENT IS SET. Length: {len(retrieved_cookie_content_from_env)}. First 100 chars: '{retrieved_cookie_content_from_env[:100]}'")
+  else:
+      current_app.logger.warning("DEBUG: YOUTUBE_COOKIES_CONTENT IS NOT SET or is empty in the environment.")
+  # --- END: TEMPORARY DEBUG LOG ---
+
   ydl_params = {
       'format': 'best',
       'cachedir': False,
@@ -38,7 +47,8 @@ def get_videos(url, extra_params):
   temp_cookie_file_path = None # To store the path of a temporary cookie file, if created from env var
 
   # --- START: New Cookie Logic (prioritizing YOUTUBE_COOKIES_CONTENT environment variable) ---
-  cookie_content_env = os.environ.get('YOUTUBE_COOKIES_CONTENT')
+  # cookie_content_env is already retrieved above for the debug log
+  cookie_content_env = retrieved_cookie_content_from_env 
   if cookie_content_env:
       try:
           # Create a temporary file to store cookie content from the environment variable
@@ -51,7 +61,7 @@ def get_videos(url, extra_params):
           ydl_params['cookies'] = temp_cookie_file_path
           current_app.logger.info(f"Using cookies from YOUTUBE_COOKIES_CONTENT environment variable via temp file: {temp_cookie_file_path}")
       except Exception as e:
-          current_app.logger.error(f"Failed to create or use temporary cookie file from YOUTUBE_COOKIES_CONTENT: {e}")
+          current_app.logger.error(f"Failed to create or use temporary cookie file from YOUTUBE_COOKIES_CONTENT: {e} - {traceback.format_exc()}")
           # Clean up if temp_cookie_file_path was somehow set but an error occurred
           if temp_cookie_file_path and os.path.exists(temp_cookie_file_path):
               try:
@@ -98,6 +108,10 @@ def get_videos(url, extra_params):
 # --- MODIFIED get_videos function ENDS HERE ---
 
 def flatten_result(result):
+  # Added safety for None result
+  if result is None:
+    current_app.logger.warning("flatten_result received None, returning empty list.")
+    return []
   r_type = result.get('_type', 'video')
   if r_type == 'video':
     videos = [result]
@@ -113,10 +127,13 @@ def flatten_result(result):
     videos = []
     # Added safety check for result['entries'] being None or not existing
     if result.get('entries'):
-        for r in result['entries']:
-            # Added safety check for r being None
-            if r:
-                videos.extend(flatten_result(r))
+        for r_entry in result['entries']: # Renamed 'r' to 'r_entry' for clarity
+            # Added safety check for r_entry being None
+            if r_entry:
+                videos.extend(flatten_result(r_entry))
+  else: # Handle unrecognized types
+    current_app.logger.warning(f"flatten_result encountered an unrecognized _type: {r_type}")
+    videos = []
   return videos
 
 api = Blueprint('api', __name__)
@@ -135,7 +152,8 @@ def set_access_control(f):
 @api.errorhandler(yt_dlp.utils.DownloadError)
 @api.errorhandler(yt_dlp.utils.ExtractorError)
 def handle_youtube_dl_error(error):
-  logging.error(traceback.format_exc())
+  # Log the full traceback for yt-dlp errors
+  current_app.logger.error(f"yt-dlp Download/Extractor Error: {str(error)}\n{traceback.format_exc()}")
   result = jsonify({'error': str(error)})
   result.status_code = 500
   return result
@@ -147,7 +165,7 @@ class WrongParameterTypeError(ValueError):
 
 @api.errorhandler(WrongParameterTypeError)
 def handle_wrong_parameter(error):
-  logging.error(traceback.format_exc())
+  current_app.logger.error(f"Wrong Parameter Type Error: {str(error)}\n{traceback.format_exc()}")
   result = jsonify({'error': str(error)})
   result.status_code = 400
   return result
@@ -186,52 +204,83 @@ ALLOWED_EXTRA_PARAMS = {
 }
 
 def get_result():
+  if 'url' not in request.args:
+      current_app.logger.error("API request made without 'url' parameter.")
+      abort(400, description="Missing 'url' parameter.")
   url = request.args['url']
   extra_params = {}
   for k, v in request.args.items():
+    if k == 'url': # Skip 'url' itself
+        continue
     if k in ALLOWED_EXTRA_PARAMS:
       convertf = ALLOWED_EXTRA_PARAMS[k]
-      if convertf == bool:
-        convertf = lambda x: query_bool(x, k)
-      elif convertf == list:
-        convertf = lambda x: x.split(',')
-      extra_params[k] = convertf(v)
+      try:
+        if convertf == bool:
+            converted_v = query_bool(v, k)
+        elif convertf == list:
+            converted_v = v.split(',') # str.split returns a list of strings
+        else:
+            converted_v = convertf(v) # For int, str
+        extra_params[k] = converted_v
+      except WrongParameterTypeError: # Catch error from query_bool
+          raise 
+      except Exception as e:
+          current_app.logger.error(f"Could not convert parameter '{k}' with value '{v}' using {convertf.__name__}: {e} - {traceback.format_exc()}")
+          raise WrongParameterTypeError(v, convertf.__name__, k) # Re-raise as our defined error
+    else:
+        current_app.logger.debug(f"Ignoring unknown query parameter: {k}")
   return get_videos(url, extra_params)
 
 @route_api('info')
 @set_access_control
 def info():
+  try:
+    result_data = get_result()
+  except Exception as e: 
+    # This will catch aborts from get_result or errors not handled by specific errorhandlers
+    if isinstance(e, (yt_dlp.utils.DownloadError, yt_dlp.utils.ExtractorError, WrongParameterTypeError)):
+        raise # Re-raise to be handled by the blueprint's error handlers
+    current_app.logger.error(f"Unexpected error in /info route during get_result: {e}\n{traceback.format_exc()}")
+    return jsonify({'error': f"An unexpected error occurred: {str(e)}"}), 500
+  
+  if result_data is None:
+      current_app.logger.error(f"get_result() returned None for URL: {request.args.get('url')}. Cannot build response.")
+      return jsonify({'error': 'Failed to retrieve video information.'}), 500
+
   url = request.args['url']
-  result = get_result()
   key = 'info'
   if query_bool(request.args.get('flatten'), 'flatten', False):
-    result = flatten_result(result)
+    final_data = flatten_result(result_data) # Renamed for clarity
     key = 'videos'
-  # Safety check for result before packaging
-  if result is None:
-      current_app.logger.error(f"get_result() returned None for URL: {url}. Cannot build response.")
-      return jsonify({'error': 'Failed to retrieve video information.'}), 500
-  result = {
+  else:
+    final_data = result_data
+  
+  response_payload = {
       'url': url,
-      key: result,
+      key: final_data,
   }
-  return jsonify(result)
+  return jsonify(response_payload)
 
 @route_api('play')
 def play():
-  result = get_result()
-  # Safety check for result before flattening and accessing
-  if result is None:
+  try:
+    result_data = get_result()
+  except Exception as e:
+    if isinstance(e, (yt_dlp.utils.DownloadError, yt_dlp.utils.ExtractorError, WrongParameterTypeError)):
+        raise
+    current_app.logger.error(f"Unexpected error in /play route during get_result: {e}\n{traceback.format_exc()}")
+    return jsonify({'error': f"An unexpected error occurred: {str(e)}"}), 500
+
+  if result_data is None:
       current_app.logger.error("get_result() returned None for /play endpoint. Cannot redirect.")
       return jsonify({'error': 'Failed to retrieve video information for play.'}), 500
   
-  flat_result = flatten_result(result)
-  # Safety check after flattening
-  if not flat_result or not isinstance(flat_result, list) or not flat_result[0] or 'url' not in flat_result[0]:
-      current_app.logger.error(f"Could not extract a playable URL. Flattened result: {flat_result}")
+  flat_results = flatten_result(result_data) # Renamed for clarity
+  if not flat_results or not isinstance(flat_results, list) or not flat_results[0] or 'url' not in flat_results[0]:
+      current_app.logger.error(f"Could not extract a playable URL. Flattened result: {flat_results}")
       return jsonify({'error': 'Could not extract a playable URL from the video information.'}), 404
       
-  return redirect(flat_result[0]['url'])
+  return redirect(flat_results[0]['url'])
 
 @route_api('extractors')
 @set_access_control
@@ -248,74 +297,86 @@ def list_extractors():
 def version():
   result = {
       'yt-dlp': yt_dlp_version,
-      'yt-dlp-api-server': 0.3, # Version of the API server code itself
+      'yt-dlp-api-server': "0.3-debug-logging", # Indicate version
   }
   return jsonify(result)
 
 app = Flask(__name__)
 app.register_blueprint(api)
 
-# Original configuration loading
-# This assumes application.cfg is one directory level above the app.py file.
-# If app.py is at the root, this should be 'application.cfg'
-cfg_file_path_original = '../application.cfg'
-# More robust way to define path to application.cfg relative to app.py:
-# If app.py is /path/to/project/src/app.py and cfg is /path/to/project/application.cfg
-# current_dir = os.path.dirname(os.path.abspath(__file__))
-# cfg_file_path = os.path.join(current_dir, '..', 'application.cfg')
-# However, sticking to user's original:
+# Configuration loading
+cfg_file_path_original = '../application.cfg' # Your original path
+# Check if this file actually exists relative to app.py
+# Example: if app.py is at /app/app.py, this looks for /application.cfg
+# If app.py is at /app/src/app.py, this looks for /app/application.cfg
+# Be sure this path is correct for your project structure.
+# If it's not found, app.config will just be empty from this call (due to silent=True).
 app.config.from_pyfile(cfg_file_path_original, silent=True)
+if not app.config and os.path.exists(os.path.join(os.path.dirname(__file__), cfg_file_path_original)):
+    current_app.logger.warning(f"Config file {cfg_file_path_original} was found but might not have loaded correctly or is empty.")
+elif not os.path.exists(os.path.join(os.path.dirname(__file__), cfg_file_path_original)):
+    current_app.logger.info(f"Config file {cfg_file_path_original} not found, using defaults or environment variables.")
 
-@app.route('/api', methods=['GET']) # This route is fine
+
+@app.route('/api', methods=['GET']) 
 def index():
   return "Hello, World!"
 
 
-# --- The following directory browsing/file serving part is kept as is from your original code ---
-home_directory = os.path.expanduser("~")
-# Note: app.instance_path might not be what you expect on Railway for shared storage.
-# It's often a folder named 'instance' next to your app package.
-# Consider using a path relative to your project root or an env var for shared_space on Railway.
-shared_space = os.path.join(os.path.dirname(app.instance_path), os.sep, '')
+# --- Directory browsing/file serving part ---
+home_directory = os.path.expanduser("~") # Not typically used on server environments like Railway
+# app.instance_path is usually a folder named 'instance' next to your app package.
+# For shared storage on Railway, consider /data persistent volume or specific path.
+# This default might not be ideal for Railway.
+shared_space = os.path.join(os.path.dirname(app.instance_path), os.sep, '') 
+# A safer default for Railway if you want a 'downloads' dir in your project:
+# shared_space = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'downloads')
+# Or better, configure via an environment variable.
+# if not os.path.exists(shared_space):
+# try:
+# os.makedirs(shared_space)
+# app.logger.info(f"Created shared_space directory: {shared_space}")
+# except OSError as e:
+# app.logger.error(f"Could not create shared_space directory {shared_space}: {e}")
 
-#import getpass
-#username = getpass.getuser() #current username
-#shared_space = 'C:\\Users\\{}\\Downloads'.format(username) #Shared folder location. customize it on your need. 
 
 @app.route('/directory/')
 @app.route('/directory/<path:folder>/')
 def directory(folder=''):
+    # Ensure shared_space is valid and exists before proceeding
+    if not os.path.isdir(os.path.abspath(shared_space)):
+        current_app.logger.error(f"Shared space directory '{shared_space}' does not exist or is not a directory.")
+        abort(500, description="Server file storage is not configured correctly.")
+
     folder_path = os.path.join(shared_space, folder)
-    # Security: Ensure folder_path is within shared_space and exists
     abs_shared_space = os.path.abspath(shared_space)
     abs_folder_path = os.path.abspath(folder_path)
     if not abs_folder_path.startswith(abs_shared_space) or not os.path.isdir(abs_folder_path):
-        current_app.logger.warning(f"Access denied or directory not found: {folder_path}")
+        current_app.logger.warning(f"Access denied or directory not found: {folder_path} (resolved to {abs_folder_path})")
         abort(404)
     try:
-        files = get_file_list(abs_folder_path) # Pass absolute path
-    except OSError: # get_file_list might raise OSError if os.listdir fails
-        current_app.logger.error(f"Error listing directory: {abs_folder_path}")
+        files = get_file_list(abs_folder_path) 
+    except OSError as e: 
+        current_app.logger.error(f"Error listing directory {abs_folder_path}: {e}")
         abort(500)
-    return render_template('directory.html', files=files, current_folder=folder_path) # Pass relative path for template
+    return render_template('directory.html', files=files, current_folder=folder) 
 
 @app.route('/directory/<path:folder>/<filename>')
 def download_file(folder, filename):
+    if not os.path.isdir(os.path.abspath(shared_space)):
+        current_app.logger.error(f"Shared space directory '{shared_space}' does not exist for download.")
+        abort(500, description="Server file storage is not configured correctly.")
+
     folder_path = os.path.join(shared_space, folder)
-    # Security: Ensure file path is within shared_space
     abs_shared_space = os.path.abspath(shared_space)
     abs_file_path = os.path.abspath(os.path.join(folder_path, filename))
     if not abs_file_path.startswith(abs_shared_space) or not os.path.isfile(abs_file_path):
-        current_app.logger.warning(f"Access denied or file not found for download: {os.path.join(folder, filename)}")
+        current_app.logger.warning(f"Access denied or file not found for download: {os.path.join(folder, filename)} (resolved to {abs_file_path})")
         abort(404)
-    # send_from_directory expects the directory part, not the full path to the file
-    # and the directory must be absolute or relative to app root.
-    # To be safe, pass the absolute directory.
-    return send_from_directory(os.path.abspath(folder_path), filename)
+    return send_from_directory(os.path.abspath(folder_path), filename, as_attachment=True)
 
 def get_file_list(folder_path_abs): # Expects absolute path
     items = []
-    # Ensure folder_path_abs is a directory before listing
     if not os.path.isdir(folder_path_abs):
         current_app.logger.error(f"get_file_list called with non-directory: {folder_path_abs}")
         raise OSError(f"Not a directory: {folder_path_abs}")
@@ -328,41 +389,39 @@ def get_file_list(folder_path_abs): # Expects absolute path
             items.append({'name': item, 'type': 'folder'})
     return items
 
-# ... (rest of your app.py code) ...
-
 if __name__ == '__main__':
-  # Configure basic logging first (good for non-Flask specific logs)
-  logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+  # --- START: Enhanced Logging Configuration ---
+  # Configure basic logging first (good for non-Flask specific logs from other libraries)
+  # Output to stdout so Gunicorn/Railway can capture it.
+  logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 
-  # Explicitly set Flask's app logger level
-  # This needs to happen AFTER `app = Flask(__name__)` is defined
-  # Get LOG_LEVEL from app.config (e.g., set in application.cfg or an env var like FLASK_LOG_LEVEL)
-  # Default to INFO if not set.
-  flask_log_level_str = app.config.get('LOG_LEVEL', os.environ.get('FLASK_LOG_LEVEL', 'INFO')).upper()
+  # Explicitly set Flask's app logger level.
+  # This needs to happen AFTER `app = Flask(__name__)` is defined.
+  # Get FLASK_LOG_LEVEL from environment, then app.config, default to INFO.
+  flask_log_level_str = os.environ.get('FLASK_LOG_LEVEL', app.config.get('LOG_LEVEL', 'INFO')).upper()
   flask_log_level = getattr(logging, flask_log_level_str, logging.INFO)
   
   app.logger.setLevel(flask_log_level)
   
-  # Also set the logger for 'yt-dlp' if you want to control its verbosity through Flask's logger
-  # (though yt-dlp's own 'verbose' param is more direct for its internal messages)
-  # logging.getLogger('yt-dlp').setLevel(flask_log_level) # Optional
-
-  # Also set the handler for app.logger to ensure it outputs where Gunicorn can pick it up (stdout)
-  # Gunicorn usually handles this, but being explicit can help.
+  # Ensure Flask's logger has a handler that outputs to stdout if it doesn't already.
+  # Gunicorn typically sets up its own handlers that capture Flask's default logger output,
+  # but this makes it more robust.
   if not app.logger.handlers:
-      handler = logging.StreamHandler(sys.stdout)
-      handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-      app.logger.addHandler(handler)
+      stdout_handler = logging.StreamHandler(sys.stdout)
+      # Use a formatter that matches the basicConfig or is suitable for production.
+      formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+      stdout_handler.setFormatter(formatter)
+      app.logger.addHandler(stdout_handler)
+      app.logger.propagate = False # Prevent duplicate logs if Gunicorn also adds a handler to root.
   
-  app.logger.info(f"Flask app logger initialized with level: {logging.getLevelName(app.logger.getEffectiveLevel())}")
+  app.logger.info(f"Flask app logger initialized. Effective level: {logging.getLevelName(app.logger.getEffectiveLevel())}")
+  # --- END: Enhanced Logging Configuration ---
 
-
-  app.config["CACHE_TYPE"] = "null" # Usually for development
+  app.config["CACHE_TYPE"] = "null" 
   
   port = int(os.environ.get('PORT', 5000))
   host = '0.0.0.0'
   
-  # Use app.logger for this message too
   app.logger.info(f"Starting WSGIServer on {host}:{port}")
   http_server = WSGIServer((host, port), app)
   try:
