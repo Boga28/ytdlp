@@ -1,10 +1,11 @@
 import functools
-import logging
+import logging # Ensure logging is imported
 import traceback
-import sys
-from flask import Flask, Blueprint, current_app, jsonify, request, redirect, abort, Response
+import sys # Ensure sys is imported
+from flask import Flask, Blueprint, current_app, jsonify, request, redirect, abort
 from io import BytesIO
-from flask import render_template, send_from_directory, url_for,send_file
+# Flask imported once is enough
+from flask import render_template, send_from_directory, url_for,send_file # Removed jsonify, request from here as already imported
 import os
 import tempfile 
 from pathlib import Path
@@ -22,11 +23,11 @@ class SimpleYDL(yt_dlp.YoutubeDL):
     self.add_default_info_extractors()
 
 # --- MODIFIED get_videos function STARTS HERE ---
+# This function is THE SAME as your last provided version, which includes verbose: True
 def get_videos(url, extra_params):
   '''
     Get a list with a dict for every video founded
     '''
-  # This logging for the cookie content will appear in your server logs.
   retrieved_cookie_content_from_env = os.environ.get('YOUTUBE_COOKIES_CONTENT')
   if retrieved_cookie_content_from_env:
       current_app.logger.info(f"DEBUG (in get_videos): YOUTUBE_COOKIES_CONTENT IS SET. Length: {len(retrieved_cookie_content_from_env)}. First 100 chars: '{retrieved_cookie_content_from_env[:100]}'")
@@ -36,7 +37,7 @@ def get_videos(url, extra_params):
   ydl_params = {
       'format': 'best',
       'cachedir': False,
-      'verbose': False, # Default verbose state
+      'verbose': True, # This was set in the previous version you provided
       'logger': current_app.logger.getChild('yt-dlp'),
       'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36'
   }
@@ -51,10 +52,7 @@ def get_videos(url, extra_params):
               temp_cookie_file_path = tmpfile.name
           ydl_params['cookies'] = temp_cookie_file_path
           current_app.logger.info(f"Using cookies from YOUTUBE_COOKIES_CONTENT environment variable via temp file: {temp_cookie_file_path}")
-          # *** yt-dlp verbose mode change STARTS HERE ***
-          current_app.logger.info("Cookies from env var detected, enabling verbose mode for yt-dlp.")
-          ydl_params['verbose'] = True # Enable verbose if cookies from env are used
-          # *** yt-dlp verbose mode change ENDS HERE ***
+          current_app.logger.info(f"yt-dlp verbose mode is active (set to: {ydl_params['verbose']})")
       except Exception as e:
           current_app.logger.error(f"Failed to create or use temporary cookie file from YOUTUBE_COOKIES_CONTENT: {e} - {traceback.format_exc()}")
           if temp_cookie_file_path and os.path.exists(temp_cookie_file_path):
@@ -67,28 +65,17 @@ def get_videos(url, extra_params):
       if cookies_path:
           ydl_params['cookies'] = cookies_path 
           current_app.logger.info(f"Using cookies from Flask config key '/cookies.txt' with path: {cookies_path}")
-          # *** yt-dlp verbose mode change STARTS HERE ***
-          current_app.logger.info("Cookies from Flask config detected, enabling verbose mode for yt-dlp.")
-          ydl_params['verbose'] = True # Enable verbose if cookies from config are used
-          # *** yt-dlp verbose mode change ENDS HERE ***
+          current_app.logger.info(f"yt-dlp verbose mode is active (set to: {ydl_params['verbose']})")
   
   if 'cookies' not in ydl_params:
-      current_app.logger.warning("No cookies configured. yt-dlp verbose mode will be default (False).")
-  else:
-      # This log confirms that verbose was intended to be set if cookies were present.
-      current_app.logger.info(f"Final yt-dlp params before update with extra_params include verbose: {ydl_params.get('verbose')}")
-
-  # IMPORTANT: extra_params could override 'verbose' if 'verbose' is an allowed extra param.
-  # As per your ALLOWED_EXTRA_PARAMS, 'verbose' is not listed, so this should be fine.
-  ydl_params.update(extra_params) 
+      current_app.logger.warning("No cookies configured. yt-dlp verbose mode remains as set initially (True for this debug).")
   
-  if 'cookies' in ydl_params and not ydl_params.get('verbose'):
-      current_app.logger.warning("Cookies are present, but yt-dlp verbose mode was potentially overridden to False by extra_params.")
-
-  current_app.logger.debug(f"Final ydl_params for yt-dlp: { {k:v for k,v in ydl_params.items() if k != 'cookies'} }") # Log params except cookies content
+  current_app.logger.info(f"yt-dlp verbose state before extra_params.update: {ydl_params.get('verbose')}")
+  ydl_params.update(extra_params) 
+  current_app.logger.info(f"Final yt-dlp verbose state after extra_params.update: {ydl_params.get('verbose')}")
+  current_app.logger.debug(f"Final ydl_params for yt-dlp (excluding cookies content if direct): { {k:v for k,v in ydl_params.items() if k != 'cookies'} }")
   if 'cookies' in ydl_params:
       current_app.logger.debug(f"yt-dlp will use cookies from: {ydl_params['cookies']}")
-
 
   ydl = SimpleYDL(ydl_params)
   
@@ -254,11 +241,30 @@ def version():
 
 
 app = Flask(__name__)
-# Debug route removed as requested by focusing only on cookie related yt-dlp config
+
+# --- START: EXPLICIT FLASK LOGGER CONFIGURATION ---
+# This ensures app.logger (and thus current_app.logger) will output DEBUG and INFO messages
+# to stdout, which Gunicorn/Railway should capture. This is critical for seeing yt-dlp's verbose output.
+LOG_FORMAT_FLASK = '%(asctime)s [%(levelname)s] %(name)s (Flask App): %(message)s'
+app.logger.setLevel(logging.DEBUG) # Set to DEBUG to capture all levels from app and yt-dlp
+if not app.logger.handlers: # Add a handler if Gunicorn hasn't already added one.
+    stream_handler = logging.StreamHandler(sys.stdout)
+    formatter = logging.Formatter(LOG_FORMAT_FLASK)
+    stream_handler.setFormatter(formatter)
+    app.logger.addHandler(stream_handler)
+    # app.logger.propagate = False # Optional: if you see duplicate messages from root logger
+app.logger.info("Flask app.logger explicitly configured with StreamHandler to stdout and DEBUG level.")
+# --- END: EXPLICIT FLASK LOGGER CONFIGURATION ---
+
 app.register_blueprint(api)
 
 cfg_file_path_original = '../application.cfg' 
 app.config.from_pyfile(cfg_file_path_original, silent=True)
+if app.config:
+    app.logger.info(f"Config file '{cfg_file_path_original}' loaded or was silent and empty.")
+else:
+    app.logger.info(f"Config file '{cfg_file_path_original}' not found or not loaded. Using defaults/env vars.")
+
 
 @app.route('/api', methods=['GET']) 
 def index(): return "Hello, World!"
@@ -315,20 +321,29 @@ def get_file_list(folder_path_abs):
     return items
 
 if __name__ == '__main__':
-  LOG_FORMAT = '%(asctime)s [%(levelname)s] %(name)s: %(message)s' 
-  logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=LOG_FORMAT)
+  # This block is for direct execution: `python app.py`
+  # The logger config here is specific to this mode of running.
+  # Gunicorn will use the `app.logger` configured above.
+  LOG_FORMAT_MAIN = '%(asctime)s [%(levelname)s] %(name)s (Direct Run): %(message)s' 
+  logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=LOG_FORMAT_MAIN) # Basic root logger
 
-  flask_log_level_str = os.environ.get('FLASK_LOG_LEVEL', app.config.get('LOG_LEVEL', 'INFO')).upper()
-  flask_log_level = getattr(logging, flask_log_level_str, logging.INFO)
-  app.logger.setLevel(flask_log_level)
+  # Re-configure app.logger specifically for direct run if necessary,
+  # though the one above should generally work if this script is top-level.
+  flask_log_level_str_main = os.environ.get('FLASK_LOG_LEVEL', app.config.get('LOG_LEVEL', 'DEBUG')).upper() # Default DEBUG for direct run
+  flask_log_level_main = getattr(logging, flask_log_level_str_main, logging.DEBUG)
   
-  if not app.logger.handlers:
-      stdout_handler = logging.StreamHandler(sys.stdout)
-      stdout_handler.setFormatter(logging.Formatter(LOG_FORMAT))
-      app.logger.addHandler(stdout_handler)
-      app.logger.propagate = False 
+  app.logger.setLevel(flask_log_level_main)
+  # Ensure it has a handler for direct run if it was stripped or not set for Gunicorn
+  if not app.logger.handlers or not any(isinstance(h, logging.StreamHandler) and h.stream == sys.stdout for h in app.logger.handlers):
+      # Remove any Gunicorn-specific handlers if present
+      app.logger.handlers = [h for h in app.logger.handlers if not type(h).__module__.startswith('gunicorn')]
+      if not app.logger.handlers: # If all handlers were removed or none existed
+          stdout_handler_main = logging.StreamHandler(sys.stdout)
+          stdout_handler_main.setFormatter(logging.Formatter(LOG_FORMAT_MAIN))
+          app.logger.addHandler(stdout_handler_main)
+          app.logger.propagate = False 
   
-  app.logger.info(f"Flask app logger initialized for direct run. Effective level: {logging.getLevelName(app.logger.getEffectiveLevel())}")
+  app.logger.info(f"Flask app logger configured for direct run. Effective level: {logging.getLevelName(app.logger.getEffectiveLevel())}")
   
   app.config["CACHE_TYPE"] = "null" 
   port = int(os.environ.get('PORT', 5000))
