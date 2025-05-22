@@ -1,91 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="utf-8">
-    <title>File Sharing</title>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Directory Listing: {{ current_folder_name }}</title>
     <style>
-        .ok {
-
-            font-size: 20px;
-        }
-
-        .op {
-            font-size: 20px;
-            margin-left: -70px;
-            font-weight: bold;
-            background-color: yellow;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-
-        .styled-table {
-            border-collapse: collapse;
-            margin: 25px 0;
-            font-size: 0.9em;
-            font-family: sans-serif;
-            min-width: 400px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
-        }
-
-        .styled-table thead tr {
-            background-color: #009879;
-            color: #ffffff;
-            text-align: left;
-        }
-
-        .styled-table th,
-        .styled-table td {
-            padding: 12px 15px;
-        }
-
-        .styled-table tbody tr {
-            border-bottom: 1px solid #dddddd;
-        }
-
-        .styled-table tbody tr:nth-of-type(even) {
-            background-color: #f3f3f3;
-        }
-
-        .styled-table tbody tr:last-of-type {
-            border-bottom: 2px solid #009879;
-        }
-
-        .styled-table tbody tr.active-row {
-            font-weight: bold;
-            color: #009879;
-        }
+        body { font-family: sans-serif; margin: 20px; }
+        ul { list-style-type: none; padding: 0; }
+        li { margin-bottom: 5px; }
+        a { text-decoration: none; color: #007bff; }
+        a:hover { text-decoration: underline; }
+        .folder::before { content: "📁 "; }
+        .file::before { content: "📄 "; }
+        .parent-link { margin-bottom: 15px; font-weight: bold; }
     </style>
 </head>
-
 <body>
-    <div class="styled-table">
-        <h1>File Sharing</h1>
-        <table class="styled-table">
-            {% if current_folder %}
-            <li><a href="{{ url_for('directory') }}">Up to Parent</a></li>
-            {% endif %}
-            <tr>
-                <th>Folder</th>
-        
-            </tr>
-            {% for item in files %}
-            <tr>
+    <h1>Directory: /{{ current_folder_path_relative if current_folder_path_relative else '' }}</h1>
 
-                {% if item.type == 'file' %}
-                <td> <a href="{{ url_for('download_file', folder=current_folder, filename=item.name) }}">{{ item.name
-                        }}</a></td>
-                
-                {% elif item.type == 'folder' %}
-                <td> <a href="{{ url_for('directory', folder=current_folder+'/'+item.name) }}">{{ item.name }}/</a></td>
-               
+    {% if parent_folder_path_relative is not none %}
+        <p class="parent-link">
+            <a href="{{ url_for('directory', folder=parent_folder_path_relative) }}">⬆️ Parent Directory</a>
+        </p>
+    {% endif %}
+
+    <ul>
+        {% for item in files %}
+            <li>
+                {% if item.type == 'folder' %}
+                    <span class="folder"></span><a href="{{ url_for('directory', folder=item.path) }}">{{ item.name }}</a>
+                {% elif item.type == 'file' %}
+                    <span class="file"></span><a href="{{ url_for('download_file_route', filepath_relative=item.path) }}">{{ item.name }}</a>
                 {% endif %}
-
-            </tr>
-            {% endfor %}
-        </table>
-    </div>
+            </li>
+        {% else %}
+            <li><em>(This directory is empty)</em></li>
+        {% endfor %}
+    </ul>
 </body>
-
 </html>
