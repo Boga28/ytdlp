@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>yt-dlp API</title>
+</head>
+<body>
+    <h1>yt-dlp API Server</h1>
+    <p>API Endpoints:</p>
+    <ul>
+        <li><a href="/api/info?url=YOUR_VIDEO_URL">/api/info</a> (GET, needs ?url=...)</li>
+        <li><a href="/api/play?url=YOUR_VIDEO_URL">/api/play</a> (GET, needs ?url=...)</li>
+        <li><a href="/api/extractors">/api/extractors</a> (GET)</li>
+        <li><a href="/api/version">/api/version</a> (GET)</li>
+    </ul>
+    <p><a href="{{ url_for('directory') }}">Browse Files (if configured)</a></p>
+</body>
+</html>
