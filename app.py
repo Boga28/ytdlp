@@ -328,19 +328,44 @@ def get_file_list(folder_path_abs): # Expects absolute path
             items.append({'name': item, 'type': 'folder'})
     return items
 
-if __name__ == '__main__':
-  # Basic logging configuration (can be overridden by Flask app's logger settings later if needed)
-  logging.basicConfig(level=logging.INFO) # Set a default logging level
+# ... (rest of your app.py code) ...
 
-  # Debug/Development
-  app.config["CACHE_TYPE"] = "null"
+if __name__ == '__main__':
+  # Configure basic logging first (good for non-Flask specific logs)
+  logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+  # Explicitly set Flask's app logger level
+  # This needs to happen AFTER `app = Flask(__name__)` is defined
+  # Get LOG_LEVEL from app.config (e.g., set in application.cfg or an env var like FLASK_LOG_LEVEL)
+  # Default to INFO if not set.
+  flask_log_level_str = app.config.get('LOG_LEVEL', os.environ.get('FLASK_LOG_LEVEL', 'INFO')).upper()
+  flask_log_level = getattr(logging, flask_log_level_str, logging.INFO)
   
-  # Production
-  # Get PORT from environment variable for Railway, default to 5000
+  app.logger.setLevel(flask_log_level)
+  
+  # Also set the logger for 'yt-dlp' if you want to control its verbosity through Flask's logger
+  # (though yt-dlp's own 'verbose' param is more direct for its internal messages)
+  # logging.getLogger('yt-dlp').setLevel(flask_log_level) # Optional
+
+  # Also set the handler for app.logger to ensure it outputs where Gunicorn can pick it up (stdout)
+  # Gunicorn usually handles this, but being explicit can help.
+  if not app.logger.handlers:
+      handler = logging.StreamHandler(sys.stdout)
+      handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+      app.logger.addHandler(handler)
+  
+  app.logger.info(f"Flask app logger initialized with level: {logging.getLevelName(app.logger.getEffectiveLevel())}")
+
+
+  app.config["CACHE_TYPE"] = "null" # Usually for development
+  
   port = int(os.environ.get('PORT', 5000))
-  # Listen on 0.0.0.0 to be accessible externally
   host = '0.0.0.0'
   
-  app.logger.info(f"Starting WSGIServer on {host}:{port}") # Use app.logger for consistency
+  # Use app.logger for this message too
+  app.logger.info(f"Starting WSGIServer on {host}:{port}")
   http_server = WSGIServer((host, port), app)
-  http_server.serve_forever()
+  try:
+    http_server.serve_forever()
+  except KeyboardInterrupt:
+    app.logger.info("Server shutting down.")
