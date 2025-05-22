@@ -253,25 +253,26 @@ def version():
   return jsonify(result)
 
 app = Flask(__name__)
-app.register_blueprint(api)
 
 # --- START: NEW DEBUG ROUTE TO DISPLAY COOKIE ENV VAR ---
-# @app.route('/debug/view-cookies-env', methods=['GET'])
-# def view_cookies_env():
-#     """
-#     SECURITY WARNING: This endpoint displays sensitive cookie information.
-#     It should ONLY be used for temporary debugging by the administrator
-#     and MUST be removed or secured after use.
-#     """
-#     cookie_content = os.environ.get('PUBLIC_DEBUG_CONTENT')
-#     if cookie_content:
-#         # Return as plain text, preserving line breaks
-#         # Using <pre> tags for basic HTML formatting if viewed in a browser
-#         html_escaped_content = cookie_content.replace('&', '&').replace('<', '<').replace('>', '>')
-#         return Response(f"<pre>{html_escaped_content}</pre>", mimetype='text/html')
-#     else:
-#         return Response("Environment variable PUBLIC_DEBUG_CONTENT is not set or is empty.", mimetype='text/plain')
+@app.route('/debug/view-cookies-env', methods=['GET'])
+def view_cookies_env():
+    """
+    SECURITY WARNING: This endpoint displays sensitive cookie information.
+    It should ONLY be used for temporary debugging by the administrator
+    and MUST be removed or secured after use.
+    """
+    cookie_content = os.environ.get('PUBLIC_DEBUG_CONTENT')
+    if cookie_content:
+        # Return as plain text, preserving line breaks
+        # Using <pre> tags for basic HTML formatting if viewed in a browser
+        html_escaped_content = cookie_content.replace('&', '&').replace('<', '<').replace('>', '>')
+        return Response(f"<pre>{html_escaped_content}</pre>", mimetype='text/html')
+    else:
+        return Response("Environment variable PUBLIC_DEBUG_CONTENT is not set or is empty.", mimetype='text/plain')
 # --- END: NEW DEBUG ROUTE ---
+
+app.register_blueprint(api)
 
 # Original configuration loading
 # This assumes application.cfg is one directory level above the app.py file.
