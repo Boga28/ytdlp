@@ -263,14 +263,14 @@ app.register_blueprint(api)
 #     It should ONLY be used for temporary debugging by the administrator
 #     and MUST be removed or secured after use.
 #     """
-#     cookie_content = os.environ.get('YOUTUBE_COOKIES_CONTENT')
+#     cookie_content = os.environ.get('PUBLIC_DEBUG_CONTENT')
 #     if cookie_content:
 #         # Return as plain text, preserving line breaks
 #         # Using <pre> tags for basic HTML formatting if viewed in a browser
 #         html_escaped_content = cookie_content.replace('&', '&').replace('<', '<').replace('>', '>')
 #         return Response(f"<pre>{html_escaped_content}</pre>", mimetype='text/html')
 #     else:
-#         return Response("Environment variable YOUTUBE_COOKIES_CONTENT is not set or is empty.", mimetype='text/plain')
+#         return Response("Environment variable PUBLIC_DEBUG_CONTENT is not set or is empty.", mimetype='text/plain')
 # --- END: NEW DEBUG ROUTE ---
 
 # Original configuration loading
