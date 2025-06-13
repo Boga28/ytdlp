@@ -12,6 +12,7 @@ from gevent.pywsgi import WSGIServer
 import yt_dlp
 from yt_dlp.version import __version__ as yt_dlp_version
 
+
 if not hasattr(sys.stderr, 'isatty'):
   # In GAE it's not defined and we must monkeypatch
   sys.stderr.isatty = lambda: False
