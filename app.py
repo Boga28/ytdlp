@@ -26,11 +26,11 @@ def get_videos(url, extra_params):
     '''
     Get a list with a dict for every video founded
     '''
-    retrieved_cookie_content_from_env = os.environ.get('YOUTUBE_COOKIES_CONTENT1')
+    retrieved_cookie_content_from_env = os.environ.get('YOUTUBE_COOKIES_CONTENT2')
     if retrieved_cookie_content_from_env:
-        current_app.logger.info(f"DEBUG (in get_videos): YOUTUBE_COOKIES_CONTENT1 IS SET. Length: {len(retrieved_cookie_content_from_env)}. First 100 chars: '{retrieved_cookie_content_from_env[:100]}'")
+        current_app.logger.info(f"DEBUG (in get_videos): YOUTUBE_COOKIES_CONTENT2 IS SET. Length: {len(retrieved_cookie_content_from_env)}. First 100 chars: '{retrieved_cookie_content_from_env[:100]}'")
     else:
-        current_app.logger.warning("DEBUG (in get_videos): YOUTUBE_COOKIES_CONTENT1 IS NOT SET or is empty in the environment.")
+        current_app.logger.warning("DEBUG (in get_videos): YOUTUBE_COOKIES_CONTENT2 IS NOT SET or is empty in the environment.")
 
     ydl_params = {
         'format': 'best',
@@ -74,7 +74,7 @@ def get_videos(url, extra_params):
             else:
                 current_app.logger.warning(f"Cookies file specified in COOKIES_FILE_PATH ('{configured_cookie_file}') not found.")
         else:
-             current_app.logger.info("No YOUTUBE_COOKIES_CONTENT1 env var and no COOKIES_FILE_PATH configured. Proceeding without explicit cookies.")
+             current_app.logger.info("No YOUTUBE_COOKIES_CONTENT2 env var and no COOKIES_FILE_PATH configured. Proceeding without explicit cookies.")
   
     if 'cookies' not in ydl_params :
         current_app.logger.warning("No cookies configured for yt-dlp for this request.")
