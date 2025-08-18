@@ -22,6 +22,6 @@ setuptools==75.1.0
 urllib3==2.2.3
 websockets==13.1
 Werkzeug==3.0.4
-yt-dlp==2025.7.21
+yt-dlp==2025.8.11
 zope.event==5.0
 zope.interface==7.1.0
